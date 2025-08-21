@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Bouquet Catch 💐</title>
+  <meta name="description" content="A tiny one‑file game: catch the bouquet!" />
+  <style>
+    :root {
+      --bg1: #fff7f9; /* soft pink */
+      --bg2: #f0fbff; /* very light blue */
+      --ink: #2b2d42;
+      --accent: #ff5e84; /* pink */
+      --accent2: #7bd389; /* mint */
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: linear-gradient(160deg, var(--bg1), var(--bg2));
+      color: var(--ink);
+      -webkit-tap-highlight-color: transparent;
+      overflow: hidden;
+    }
+    #gameCanvas { display: block; width: 100vw; height: 100vh; }
+
+    .ui {
+      position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none;
+    }
+    .card {
+      pointer-events: auto;
+      background: rgba(255,255,255,0.85);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+      border: 1px solid rgba(0,0,0,0.05);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      border-radius: 20px; padding: 20px 22px; max-width: 560px; margin: 16px;
+      text-align: center;
+    }
+    h1 { font-size: 28px; margin: 0 0 6px; }
+    p { margin: 6px 0 12px; }
+    .btn {
+      display: inline-block; cursor: pointer; user-select: none;
+      background: var(--accent); color: white; border: none; border-radius: 14px;
+      padding: 12px 16px; font-weight: 600; font-size: 16px; box-shadow: 0 6px 16px rgba(255,94,132,0.35);
+    }
+    .btn.secondary { background: var(--accent2); box-shadow: 0 6px 16px rgba(123,211,137,0.3); color: #053b1d; }
+    .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    .hud { position: fixed; left: 12px; top: env(safe-area-inset-top, 12px); background: rgba(255,255,255,0.75);
+      padding: 6px 10px; border-radius: 14px; font-size: 14px; border: 1px solid rgba(0,0,0,0.06);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" aria-label="Bouquet Catch game" role="img"></canvas>
+
+  <div class="hud" id="hud">💐 Throws: <span id="throws">0</span> • ✅ Catches: <span id="catches">0</span></div>
+
+  <!-- Overlays -->
+  <div class="ui" id="startUI" aria-live="polite">
+    <div class="card">
+      <h1>Catch the Bouquet 💐</h1>
+      <p>Move your character to catch the falling bouquet. Tap/drag to move. (Or use ◄ ► on a keyboard.)</p>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn" id="startBtn">Start</button>
+        <button class="btn secondary" id="howBtn">How to play</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ui" id="howUI" hidden>
+    <div class="card">
+      <h1>How it works</h1>
+      <p>👰 The bride throws the bouquet. It follows a cute arc with a bit of physics.</p>
+      <p>🫶 You control the catcher at the bottom. Move horizontally by tapping or dragging anywhere.</p>
+      <p>💡 Tip: The bouquet lands roughly under where it would touch the ground — try to be there first!</p>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn" id="closeHow">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ui" id="winUI" hidden>
+    <div class="card">
+      <h1 style="color:var(--accent)">Congratulations! Now you are ready! 🎉</h1>
+      <p>You caught the bouquet! 💐</p>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn" id="againBtn1">Play again</button>
+        <button class="btn secondary" id="shareBtn">Share</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ui" id="loseUI" hidden>
+    <div class="card">
+      <h1>So close! 😊</h1>
+      <p>Missed this time. Want to try again?</p>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn" id="againBtn2">Try again</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const startUI = document.getElementById('startUI');
+  const howUI = document.getElementById('howUI');
+  const winUI = document.getElementById('winUI');
+  const loseUI = document.getElementById('loseUI');
+  const throwsEl = document.getElementById('throws');
+  const catchesEl = document.getElementById('catches');
+  const $ = (id)=>document.getElementById(id);
+
+  // User‑tweakable options
+  const OPTIONS = {
+    gravity: 1400,        // px/s^2
+    catchRadius: 32,      // roughly bouquet radius for collision
+    playerWidth: 100,     // player hit box width
+    playerSpeed: 700,     // unused with drag, used with keyboard (px/s)
+    throwTimeMin: 1.10,   // seconds to landing
+    throwTimeMax: 1.70,
+  };
+
+  // Resize & DPR handling
+  let W = 0, H = 0, DPR = 1;
+  function resize(){
+    DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    W = Math.floor(window.innerWidth);
+    H = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', ()=>{
+    const wasPlaying = state.mode === 'playing';
+    resize();
+    // reposition static actors on resize
+    bride.x = W*0.5; bride.y = Math.min(120, H*0.18);
+    player.y = Math.max(H - 60, H*0.82);
+    if (!wasPlaying) draw();
+  });
+
+  // Actors
+  const bride = { x: 0, y: 0 };
+  const player = { x: 0, y: 0, vx: 0 };
+  const bouquet = { x: 0, y: 0, vx: 0, vy: 0, flying: false };
+
+  const state = { mode: 'start', throws: 0, catches: 0, lastTime: 0, pointerActive:false, targetX:null };
+
+  function resetPositions(){
+    bride.x = W*0.5; bride.y = Math.min(120, H*0.18);
+    player.x = W*0.5; player.y = Math.max(H - 60, H*0.82);
+    bouquet.x = bride.x + 0; bouquet.y = bride.y - 10; bouquet.vx = 0; bouquet.vy = 0; bouquet.flying = false;
+    state.targetX = null;
+  }
+
+  function startThrow(){
+    state.mode = 'playing';
+    state.throws++;
+    throwsEl.textContent = state.throws;
+    // Choose a target x within safe horizontal margins
+    const margin = Math.max(40, W * 0.08);
+    const targetX = margin + Math.random() * (W - margin*2);
+    state.targetX = targetX;
+
+    // Choose time to land and compute velocities to land near player's ground line
+    const T = OPTIONS.throwTimeMin + Math.random()*(OPTIONS.throwTimeMax-OPTIONS.throwTimeMin);
+    const x0 = bride.x, y0 = bride.y;
+    const xT = targetX, yT = player.y - OPTIONS.catchRadius; // approximate ground at player height
+    bouquet.vx = (xT - x0) / T;
+    bouquet.vy = (yT - y0 - 0.5*OPTIONS.gravity*T*T) / T; // from y(T) = y0 + vy*T + 0.5*g*T^2
+    bouquet.x = x0; bouquet.y = y0 - 10; bouquet.flying = true;
+
+    if (navigator.vibrate) navigator.vibrate(10);
+  }
+
+  // Input — tap/drag to move horizontally; keyboard fallback
+  let lastPointerX = null;
+  function setPlayerX(px){ player.x = Math.max(OPTIONS.playerWidth*0.5, Math.min(W - OPTIONS.playerWidth*0.5, px)); }
+
+  canvas.addEventListener('pointerdown', (e)=>{ state.pointerActive = true; setPlayerX(e.clientX); if(state.mode!=='playing') startThrow(); });
+  canvas.addEventListener('pointermove', (e)=>{ if(state.pointerActive) setPlayerX(e.clientX); });
+  window.addEventListener('pointerup', ()=>{ state.pointerActive = false; });
+
+  window.addEventListener('keydown', (e)=>{
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (state.mode!=='playing') startThrow();
+    }
+  });
+
+  // Share button (after win)
+  $('shareBtn').addEventListener('click', async ()=>{
+    try {
+      const shareData = { title: document.title, text: 'I caught the bouquet! 💐', url: location.href };
+      if (navigator.share) await navigator.share(shareData);
+      else {
+        await navigator.clipboard.writeText(location.href);
+        alert('Link copied to clipboard!');
+      }
+    } catch (e) {}
+  });
+
+  // UI buttons
+  $('startBtn').addEventListener('click', ()=>{ startUI.hidden = true; startThrow(); });
+  $('howBtn').addEventListener('click', ()=>{ howUI.hidden = false; });
+  $('closeHow').addEventListener('click', ()=>{ howUI.hidden = true; });
+  $('againBtn1').addEventListener('click', ()=>{ winUI.hidden = true; startUI.hidden = true; restart(); });
+  $('againBtn2').addEventListener('click', ()=>{ loseUI.hidden = true; startUI.hidden = true; restart(); });
+
+  function restart(){ resetPositions(); startThrow(); }
+
+  // Game loop
+  function step(ts){
+    if (!state.lastTime) state.lastTime = ts;
+    const dt = Math.min(0.033, (ts - state.lastTime) / 1000);
+    state.lastTime = ts;
+
+    // Keyboard movement
+    if (document.hasFocus()) {
+      const left = keys['ArrowLeft']||keys['a'];
+      const right = keys['ArrowRight']||keys['d'];
+      if (left || right) {
+        const dir = (right?1:0) - (left?1:0);
+        setPlayerX(player.x + dir * OPTIONS.playerSpeed * dt);
+      }
+    }
+
+    // Physics update
+    if (bouquet.flying) {
+      bouquet.vy += OPTIONS.gravity * dt;
+      bouquet.x += bouquet.vx * dt;
+      bouquet.y += bouquet.vy * dt;
+
+      // Catch detection (circle‑rect overlap simplified)
+      const half = OPTIONS.playerWidth * 0.5;
+      const nearestX = Math.max(player.x - half, Math.min(bouquet.x, player.x + half));
+      const dx = bouquet.x - nearestX;
+      const dy = bouquet.y - player.y;
+      const dist2 = dx*dx + dy*dy;
+      if (dist2 <= OPTIONS.catchRadius*OPTIONS.catchRadius && bouquet.y <= player.y + OPTIONS.catchRadius) {
+        // Caught!
+        bouquet.flying = false;
+        state.catches++; catchesEl.textContent = state.catches;
+        glowBurst(bouquet.x, bouquet.y);
+        if (navigator.vibrate) navigator.vibrate([30, 30, 60]);
+        state.mode = 'won';
+        setTimeout(()=>{ winUI.hidden = false; }, 250);
+      }
+
+      // Missed if bouquet passed ground line
+      if (bouquet.y > player.y + OPTIONS.catchRadius*1.2) {
+        bouquet.flying = false;
+        state.mode = 'lost';
+        setTimeout(()=>{ loseUI.hidden = false; }, 150);
+      }
+    }
+
+    draw();
+    requestAnimationFrame(step);
+  }
+
+  // Simple confetti/glow effect
+  const sparks = [];
+  function glowBurst(x,y){
+    for (let i=0;i<80;i++){
+      sparks.push({ x,y, vx:(Math.random()*2-1)*240, vy:(Math.random()*2-1)*240, a:1, r:2+Math.random()*2 });
+    }
+  }
+
+  // Drawing
+  function draw(){
+    // Sky
+    const grad = ctx.createLinearGradient(0,0,0,H);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(1, '#f8fbff');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+
+    // Ground line
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(0, player.y + 28); ctx.lineTo(W, player.y + 28); ctx.stroke();
+
+    // Bride (emoji)
+    ctx.font = '48px system-ui, Apple Color Emoji, Segoe UI Emoji';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('👰', bride.x, bride.y);
+
+    // Arc hint to target (subtle)
+    if (state.mode==='playing' && state.targetX!=null){
+      ctx.globalAlpha = 0.08;
+      ctx.strokeStyle = '#ff5e84'; ctx.lineWidth = 3; ctx.setLineDash([6,6]);
+      ctx.beginPath(); ctx.moveTo(bride.x, bride.y);
+      ctx.quadraticCurveTo((bride.x+state.targetX)/2, bride.y-140, state.targetX, player.y);
+      ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+
+    // Bouquet
+    if (state.mode!=='start'){
+      ctx.font = '38px system-ui, Apple Color Emoji, Segoe UI Emoji';
+      if (bouquet.flying) ctx.fillText('💐', bouquet.x, bouquet.y);
+      else if (state.mode==='lost') ctx.fillText('💐', Math.max(24, Math.min(W-24, bouquet.x)), player.y);
+    }
+
+    // Player (heart / catcher)
+    // Hitbox visualization (subtle shadow)
+    ctx.fillStyle = 'rgba(255,94,132,0.15)';
+    ctx.fillRect(player.x - OPTIONS.playerWidth*0.5, player.y - 6, OPTIONS.playerWidth, 12);
+    ctx.font = '44px system-ui, Apple Color Emoji, Segoe UI Emoji';
+    ctx.fillText('🫶', player.x, player.y - 22);
+
+    // Sparks
+    for (let i=sparks.length-1; i>=0; i--){
+      const s = sparks[i];
+      s.vx *= 0.99; s.vy += 16/60; s.x += s.vx/60; s.y += s.vy/60; s.a -= 0.018;
+      if (s.a <= 0) { sparks.splice(i,1); continue; }
+      ctx.globalAlpha = Math.max(0, s.a);
+      ctx.fillStyle = i%2? '#ff5e84' : '#7bd389';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // UI visibility
+    startUI.hidden = state.mode !== 'start';
+  }
+
+  // Key handling
+  const keys = {};
+  window.addEventListener('keydown', e=>{ keys[e.key] = true; });
+  window.addEventListener('keyup', e=>{ keys[e.key] = false; });
+
+  // Init
+  resize();
+  resetPositions();
+  draw();
+  requestAnimationFrame(step);
+})();
+</script>
+</body>
+</html>
