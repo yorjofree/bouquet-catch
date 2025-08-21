@@ -202,6 +202,22 @@
   canvas.addEventListener('pointermove', (e)=>{ if(state.pointerActive) setPlayerX(e.clientX); });
   window.addEventListener('pointerup', ()=>{ state.pointerActive = false; });
 
+  // Global outside‑tap handler to close end popups (use capture to stop the event reaching the canvas)
+  document.addEventListener('pointerdown', (e)=>{
+    if (!winUI.hidden || !loseUI.hidden) {
+      const card = e.target.closest('.card');
+      const tappedOutsideCard = !card || (!winUI.contains(card) && !loseUI.contains(card));
+      if (tappedOutsideCard) {
+        winUI.hidden = true;
+        loseUI.hidden = true;
+        resetPositions();
+        state.mode = 'start';
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+  }, { capture: true });
+
   window.addEventListener('keydown', (e)=>{
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       if (state.mode!=='playing') startThrow();
