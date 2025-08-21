@@ -49,6 +49,8 @@
     .hud { position: fixed; left: 12px; top: env(safe-area-inset-top, 12px); background: rgba(255,255,255,0.75);
       padding: 6px 10px; border-radius: 14px; font-size: 14px; border: 1px solid rgba(0,0,0,0.06);
     }
+      /* Ensure hidden overlays actually hide even with .ui display rules */
+    [hidden]{ display:none !important; }
   </style>
 </head>
 <body>
