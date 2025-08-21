@@ -184,7 +184,21 @@
   let lastPointerX = null;
   function setPlayerX(px){ player.x = Math.max(OPTIONS.playerWidth*0.5, Math.min(W - OPTIONS.playerWidth*0.5, px)); }
 
-  canvas.addEventListener('pointerdown', (e)=>{ state.pointerActive = true; setPlayerX(e.clientX); if(state.mode!=='playing') startThrow(); });
+  canvas.addEventListener('pointerdown', (e)=>{
+    // If an end popup is visible, close it when tapping outside of it
+    if (!winUI.hidden || !loseUI.hidden) {
+      winUI.hidden = true;
+      loseUI.hidden = true;
+      // Prepare next round but do not auto-throw on this same tap
+      resetPositions();
+      state.mode = 'start';
+      e.preventDefault();
+      return;
+    }
+    state.pointerActive = true;
+    setPlayerX(e.clientX);
+    if(state.mode!=='playing') startThrow();
+  });
   canvas.addEventListener('pointermove', (e)=>{ if(state.pointerActive) setPlayerX(e.clientX); });
   window.addEventListener('pointerup', ()=>{ state.pointerActive = false; });
 
