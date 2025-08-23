@@ -151,11 +151,12 @@
   const player = { x: 0, y: 0, vx: 0 };
   const bouquet = { x: 0, y: 0, vx: 0, vy: 0, flying: false };
 
-  const state = { mode: 'start', throws: 0, catches: 0, lastTime: 0, pointerActive:false, targetX:null };
+  const state = { mode: 'start', throws: 0, catches: 0, lastTime: 0, targetX:null };
 
   function resetPositions(){
     bride.x = W*0.5; bride.y = Math.min(120, H*0.18);
     player.x = W*0.5; player.y = Math.max(H - 60, H*0.82);
+    player.vx = 0;
     bouquet.x = bride.x + 0; bouquet.y = bride.y - 10; bouquet.vx = 0; bouquet.vy = 0; bouquet.flying = false;
     state.targetX = null;
   }
@@ -164,6 +165,10 @@
     state.mode = 'playing';
     state.throws++;
     throwsEl.textContent = state.throws;
+    // Start player movement
+    if (player.vx === 0) {
+      player.vx = (Math.random() < 0.5 ? 1 : -1) * OPTIONS.playerSpeed;
+    }
     // Choose a target x within safe horizontal margins
     const margin = Math.max(40, W * 0.08);
     const targetX = margin + Math.random() * (W - margin*2);
@@ -195,12 +200,12 @@
       e.preventDefault();
       return;
     }
-    state.pointerActive = true;
-    setPlayerX(e.clientX);
-    if(state.mode!=='playing') startThrow();
+    if(state.mode!=='playing') {
+      startThrow();
+    } else {
+      player.vx *= -1;
+    }
   });
-  canvas.addEventListener('pointermove', (e)=>{ if(state.pointerActive) setPlayerX(e.clientX); });
-  window.addEventListener('pointerup', ()=>{ state.pointerActive = false; });
 
   // Global outside‑tap handler to close end popups (use capture to stop the event reaching the canvas)
   document.addEventListener('pointerdown', (e)=>{
@@ -219,8 +224,12 @@
   }, { capture: true });
 
   window.addEventListener('keydown', (e)=>{
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      if (state.mode!=='playing') startThrow();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ') {
+      if (state.mode!=='playing') {
+        startThrow();
+      } else {
+        player.vx *= -1;
+      }
     }
   });
 
@@ -251,14 +260,14 @@
     const dt = Math.min(0.033, (ts - state.lastTime) / 1000);
     state.lastTime = ts;
 
-    // Keyboard movement
-    if (document.hasFocus()) {
-      const left = keys['ArrowLeft']||keys['a'];
-      const right = keys['ArrowRight']||keys['d'];
-      if (left || right) {
-        const dir = (right?1:0) - (left?1:0);
-        setPlayerX(player.x + dir * OPTIONS.playerSpeed * dt);
+    // Player movement
+    if (state.mode === 'playing') {
+      player.x += player.vx * dt;
+      const half = OPTIONS.playerWidth * 0.5;
+      if (player.x <= half || player.x >= W - half) {
+        player.vx *= -1;
       }
+      player.x = Math.max(half, Math.min(W - half, player.x));
     }
 
     // Physics update
@@ -286,6 +295,7 @@
       // Missed if bouquet passed ground line
       if (bouquet.y > player.y + OPTIONS.catchRadius*1.2) {
         bouquet.flying = false;
+        player.vx = 0;
         state.mode = 'lost';
         setTimeout(()=>{ loseUI.hidden = false; }, 150);
       }
