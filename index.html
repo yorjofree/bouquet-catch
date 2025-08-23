@@ -119,8 +119,8 @@
   const OPTIONS = {
     gravity: 1400,        // px/s^2
     catchRadius: 32,      // roughly bouquet radius for collision
-    playerWidth: 100,     // player hit box width
-    playerSpeed: 700,     // unused with drag, used with keyboard (px/s)
+    playerWidth: 60,     // player hit box width
+    playerSpeed: 700,     // speed for automatic movement (px/s)
     throwTimeMin: 1.10,   // seconds to landing
     throwTimeMax: 1.70,
   };
@@ -370,11 +370,6 @@
     // UI visibility
     startUI.hidden = state.mode !== 'start';
   }
-
-  // Key handling
-  const keys = {};
-  window.addEventListener('keydown', e=>{ keys[e.key] = true; });
-  window.addEventListener('keyup', e=>{ keys[e.key] = false; });
 
   // Init
   resize();
