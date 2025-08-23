@@ -230,6 +230,16 @@
 
   window.addEventListener('keydown', (e)=>{
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ') {
+      // If an end popup is visible, close it and reset
+      if (!winUI.hidden || !loseUI.hidden) {
+        winUI.hidden = true;
+        loseUI.hidden = true;
+        resetPositions();
+        state.mode = 'start';
+        e.preventDefault();
+        return;
+      }
+
       if (state.mode!=='playing') {
         startThrow();
       } else {
