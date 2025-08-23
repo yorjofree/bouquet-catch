@@ -123,6 +123,7 @@
     playerSpeed: 700,     // speed for automatic movement (px/s)
     throwTimeMin: 1.10,   // seconds to landing
     throwTimeMax: 1.70,
+    throwDelay: 400,      // ms before bouquet is thrown
   };
 
   // Resize & DPR handling
@@ -163,26 +164,30 @@
 
   function startThrow(){
     state.mode = 'playing';
-    state.throws++;
-    throwsEl.textContent = state.throws;
     // Start player movement
     if (player.vx === 0) {
       player.vx = (Math.random() < 0.5 ? 1 : -1) * OPTIONS.playerSpeed;
     }
-    // Choose a target x within safe horizontal margins
-    const margin = Math.max(40, W * 0.08);
-    const targetX = margin + Math.random() * (W - margin*2);
-    state.targetX = targetX;
 
-    // Choose time to land and compute velocities to land near player's ground line
-    const T = OPTIONS.throwTimeMin + Math.random()*(OPTIONS.throwTimeMax-OPTIONS.throwTimeMin);
-    const x0 = bride.x, y0 = bride.y;
-    const xT = targetX, yT = player.y - OPTIONS.catchRadius; // approximate ground at player height
-    bouquet.vx = (xT - x0) / T;
-    bouquet.vy = (yT - y0 - 0.5*OPTIONS.gravity*T*T) / T; // from y(T) = y0 + vy*T + 0.5*g*T^2
-    bouquet.x = x0; bouquet.y = y0 - 10; bouquet.flying = true;
+    setTimeout(()=>{
+      if (state.mode !== 'playing') return; // check if game was reset during delay
+      state.throws++;
+      throwsEl.textContent = state.throws;
+      // Choose a target x within safe horizontal margins
+      const margin = Math.max(40, W * 0.08);
+      const targetX = margin + Math.random() * (W - margin*2);
+      state.targetX = targetX;
 
-    if (navigator.vibrate) navigator.vibrate(10);
+      // Choose time to land and compute velocities to land near player's ground line
+      const T = OPTIONS.throwTimeMin + Math.random()*(OPTIONS.throwTimeMax-OPTIONS.throwTimeMin);
+      const x0 = bride.x, y0 = bride.y;
+      const xT = targetX, yT = player.y - OPTIONS.catchRadius; // approximate ground at player height
+      bouquet.vx = (xT - x0) / T;
+      bouquet.vy = (yT - y0 - 0.5*OPTIONS.gravity*T*T) / T; // from y(T) = y0 + vy*T + 0.5*g*T^2
+      bouquet.x = x0; bouquet.y = y0 - 10; bouquet.flying = true;
+
+      if (navigator.vibrate) navigator.vibrate(10);
+    }, OPTIONS.throwDelay);
   }
 
   // Input — tap/drag to move horizontally; keyboard fallback
