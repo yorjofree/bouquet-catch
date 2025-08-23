@@ -205,9 +205,9 @@
       e.preventDefault();
       return;
     }
-    if(state.mode!=='playing') {
+    if(state.mode === 'start') {
       startThrow();
-    } else {
+    } else if (state.mode === 'playing') {
       player.vx *= -1;
     }
   });
@@ -240,9 +240,9 @@
         return;
       }
 
-      if (state.mode!=='playing') {
+      if (state.mode === 'start') {
         startThrow();
-      } else {
+      } else if (state.mode === 'playing') {
         player.vx *= -1;
       }
     }
